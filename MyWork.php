@@ -1,5 +1,7 @@
 <?php
 
+
+
 class MyWork extends Threaded
 {
     private $number; // номер потока
@@ -16,16 +18,19 @@ class MyWork extends Threaded
     {
         $this->counter = 0;
         $this->number = $number;
-        $this->provider = $this->worker->getProvider();
-        $this->root = $this->provider->getRoot();
-        $this->transition = $this->provider->getTransition();
-        $this->checkstatus = $this->provider->getCheckstatus();
-        $this->max_depth = $this->provider->getMaxDepth();
         $this->next_url = $next_url;
     }
 
     public function run()
     {
+        $this->provider = $this->worker->getProvider();
+        $this->provider->synchronized(function ($provider) {
+            $provider->incThreadsCounter();
+        }, $this->provider);
+        $this->root = $this->provider->getRoot();
+        $this->transition = $this->provider->getTransition();
+        $this->checkstatus = $this->provider->getCheckstatus();
+        $this->max_depth = $this->provider->getMaxDepth();
         $data = $this->next_url;
         do {
             $url = $data['url'];
@@ -65,7 +70,12 @@ class MyWork extends Threaded
             $this->provider->synchronized(function ($provider) use (&$data) {
                 $data = $provider->getNextUrl();
             }, $this->provider);
-        } while ($data !== null);
+            echo 'data = ' . $data . PHP_EOL;
+        } while (!empty($data));
+        $this->provider->synchronized(function ($provider) {
+            $provider->decThreadsCounter();
+        }, $this->provider);
+        echo "Thread {$this->number} stopped" . PHP_EOL;
     }
 
     private function pageParser($url, $depth)
@@ -77,6 +87,7 @@ class MyWork extends Threaded
                 $alllinks = $html->find('a[href]');
                 foreach ($alllinks as $link) {
                     $href = $link->attr['href'];
+                    echo 'Parse url:' . $href . PHP_EOL;
                     if ($href != null) {
                         if (preg_match('/\.(png|jpeg|gif|jpg|js|css|xml|pdf)/', $href)) {
                             continue;

@@ -1,5 +1,5 @@
 <?php
-require_once("vendor/autoload.php");
+//require_once("vendor/autoload.php");
 require_once "Urlparser.php";
 
 if (extension_loaded("pthreads")) {
@@ -13,7 +13,7 @@ $start = microtime(true);
 $url = "http://simonenko.su";
 //$url = "https://wiki.pwodev.com";
 
-$parser = new Urlparser($url, 10, 2, ALL, true, false);
+$parser = new Urlparser($url, 5, 2, ALL, true, false);
 $parser->parse();
 
 printf(PHP_EOL . "Done for %.2f seconds" . PHP_EOL, microtime(true) - $start);

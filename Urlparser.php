@@ -35,7 +35,7 @@ class Urlparser
 
     public function parse()
     {
-        $pool = new Pool($this->max_threads, 'MyWorker', [$this->provider]);
+        //$pool = new Pool($this->max_threads, 'MyWorker', [$this->provider]);
         $i = 1; // номер потока
         do {
             $next_url = null;
@@ -43,13 +43,22 @@ class Urlparser
                 $next_url = $provider->getNextUrl();
             }, $this->provider);
             if ($next_url === null) {
+                echo 'next = null' . PHP_EOL;
                 usleep(500000); //ждать полсекунды
-                continue;
+            } else {
+                //$pool->submit(new MyWork($i, $next_url));
+                new MyWork($i, $next_url);
+                echo 'Start #' . $i . PHP_EOL;
+                $i++;
             }
-            $pool->submit(new MyWork($i, $next_url));
-            $i++;
-        } while ($pool->collect() || $next_url !== null);
-        $pool->shutdown();
+            $threads_counter = 0;
+            $this->provider->synchronized(function ($provider) use (&$threads_counter) {
+                $threads_counter = $provider->getThreadsCounter();
+            }, $this->provider);
+            echo 'pool: ' . $threads_counter . PHP_EOL;
+        } while ($threads_counter > 0 || $next_url !== null);
+        echo 'Start threads stopped!' . PHP_EOL;
+        //$pool->shutdown();
 
         /*if ($save_to_db) {
             $this->saveToDB(true);

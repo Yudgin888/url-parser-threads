@@ -24,6 +24,8 @@ class MyDataProvider extends Threaded
     public $internal_counter;
     public $external_counter;
 
+    private $threads_counter;
+
     public function __construct($depth, $root, $transition, $checkstatus)
     {
         $this->raw_links = [];
@@ -34,13 +36,31 @@ class MyDataProvider extends Threaded
         $this->transition = $transition;
         $this->checkstatus = $checkstatus;
         $this->internal_counter = $this->external_counter = 0;
+        $this->threads_counter = 0;
     }
 
-    public function incInternalCounter(){
+    public function getThreadsCounter()
+    {
+        return $this->threads_counter;
+    }
+
+    public function incThreadsCounter()
+    {
+        $this->threads_counter += 1;
+    }
+
+    public function decThreadsCounter()
+    {
+        $this->threads_counter = (int)$this->threads_counter - 1;
+    }
+
+    public function incInternalCounter()
+    {
         $this->internal_counter++;
     }
 
-    public function incExternalCounter(){
+    public function incExternalCounter()
+    {
         $this->external_counter++;
     }
 
@@ -71,8 +91,9 @@ class MyDataProvider extends Threaded
 
     public function getNextUrl()
     {
+        echo 'Quantity links: ' . count($this->raw_links) . PHP_EOL;
         if (count($this->raw_links) > 0) {
-            return array_pop($this->raw_links);
+            return (array)$this->raw_links->pop();
         } else return null;
     }
 
@@ -88,7 +109,8 @@ class MyDataProvider extends Threaded
 
     public function putUniqueLink($url)
     {
-        if (!isset($this->unique_links[$url])) {
+        $unique_links = (array)$this->unique_links;
+        if (!isset($unique_links[$url])) {
             $this->unique_links[$url] = 1;
             return true;
         } else return false;
