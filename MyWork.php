@@ -1,7 +1,6 @@
 <?php
 
 
-
 class MyWork extends Threaded
 {
     private $number; // номер потока
@@ -11,7 +10,6 @@ class MyWork extends Threaded
     private $root;
     private $transition;
     private $checkstatus;
-    private $max_depth;
     private $next_url;
 
     public function __construct($number, $next_url)
@@ -24,58 +22,41 @@ class MyWork extends Threaded
     public function run()
     {
         $this->provider = $this->worker->getProvider();
-        $this->provider->synchronized(function ($provider) {
-            $provider->incThreadsCounter();
-        }, $this->provider);
+
         $this->root = $this->provider->getRoot();
         $this->transition = $this->provider->getTransition();
         $this->checkstatus = $this->provider->getCheckstatus();
-        $this->max_depth = $this->provider->getMaxDepth();
         $data = $this->next_url;
-        do {
-            $url = $data['url'];
-            $depth = $data['depth'];
-            $parrent_url = $data['parrent_url'];
 
-            if ($this->max_depth != 0 && $depth > $this->max_depth) {
-                continue;
-            }
-            $typeUrl = $this->checkTypeUrl($url);
-            if ($typeUrl === $this->transition || $this->transition === ALL) {
-                $arr = [
-                    'url' => $url,
-                    'status' => $this->checkstatus ? $this->getStatus($url) : null,
-                    'depth' => $depth,
-                    'parrent_url' => $parrent_url,
-                    'type' => $typeUrl,
-                ];
-                $this->provider->synchronized(function ($provider) use ($arr) {
-                    $provider->putLink($arr);
-                }, $this->provider);
-                $this->counter++;
+        $url = $data['url'];
+        $depth = $data['depth'];
+        $parrent_url = $data['parrent_url'];
 
-                if ($typeUrl === INTERNAL) {
-                    $this->provider->incInternalCounter();
-                } else {
-                    $this->provider->incExternalCounter();
-                }
-                echo 'Th: ' . $this->number . ' (' . $this->counter . ') url: ' . $arr['url'] . ', status: ' . $arr['status'] .
-                    ', depth: ' . $arr['depth'] . PHP_EOL;
-            }
-            if ($typeUrl === INTERNAL) {
-                $this->pageParser($url, $depth + 1);
-            }
-
-            $data = null;
-            $this->provider->synchronized(function ($provider) use (&$data) {
-                $data = $provider->getNextUrl();
+        $typeUrl = $this->checkTypeUrl($url);
+        if ($typeUrl === $this->transition || $this->transition === ALL) {
+            $arr = [
+                'url' => $url,
+                'status' => $this->checkstatus ? $this->getStatus($url) : null,
+                'depth' => $depth,
+                'parrent_url' => $parrent_url,
+                'type' => $typeUrl,
+            ];
+            $this->provider->synchronized(function ($provider) use ($arr, $typeUrl) {
+                $provider->putLink($arr, $typeUrl);
             }, $this->provider);
-            echo 'data = ' . $data . PHP_EOL;
-        } while (!empty($data));
+            $this->counter++;
+
+            echo 'Th: ' . $this->number . ' (' . $this->counter . ') url: ' . $arr['url'] . ', status: ' . $arr['status'] .
+                ', depth: ' . $arr['depth'] . PHP_EOL;
+        }
+        if ($typeUrl === INTERNAL) {
+            $this->pageParser($url, $depth + 1);
+        }
+
         $this->provider->synchronized(function ($provider) {
             $provider->decThreadsCounter();
         }, $this->provider);
-        echo "Thread {$this->number} stopped" . PHP_EOL;
+        //echo "Thread {$this->number} stopped" . PHP_EOL;
     }
 
     private function pageParser($url, $depth)
@@ -87,7 +68,7 @@ class MyWork extends Threaded
                 $alllinks = $html->find('a[href]');
                 foreach ($alllinks as $link) {
                     $href = $link->attr['href'];
-                    echo 'Parse url:' . $href . PHP_EOL;
+                    //echo 'Parse url:' . $href . PHP_EOL;
                     if ($href != null) {
                         if (preg_match('/\.(png|jpeg|gif|jpg|js|css|xml|pdf)/', $href)) {
                             continue;

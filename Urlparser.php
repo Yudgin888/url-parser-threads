@@ -3,6 +3,7 @@ require_once "simplehtmldom/simple_html_dom.php";
 require_once 'MyWorker.php';
 require_once 'MyWork.php';
 require_once 'MyDataProvider.php';
+require_once "mysql_wrapper.php";
 
 set_time_limit(0);
 define("INTERNAL", 1); // только внутренние
@@ -14,14 +15,16 @@ class Urlparser
     private $max_threads;
     private $save_to_db;
     private $starturl;
+    private $max_depth;
     public $provider;
 
     public function __construct($url, $max_threads, $depth = 0, $transition = INTERNAL, $checkstatus = false, $save_to_db = false)
     {
         $this->starturl = $url;
+        $this->max_depth = $depth;
         $parts = parse_url($url);
         $root = $parts['scheme'] . '://' . $parts['host'];
-        $this->provider = new MyDataProvider($depth, $root, $transition, $checkstatus);
+        $this->provider = new MyDataProvider($root, $transition, $checkstatus);
         $this->provider->putUniqueLink($url);
         $rawLink = [
             'url' => $url,
@@ -35,33 +38,41 @@ class Urlparser
 
     public function parse()
     {
-        //$pool = new Pool($this->max_threads, 'MyWorker', [$this->provider]);
+        echo 'Start parse!' . PHP_EOL;
+        $pool = new Pool($this->max_threads, 'MyWorker', [$this->provider]);
         $i = 1; // номер потока
-        do {
+        while ($this->checkStatus()) {
             $next_url = null;
             $this->provider->synchronized(function ($provider) use (&$next_url) {
                 $next_url = $provider->getNextUrl();
             }, $this->provider);
-            if ($next_url === null) {
-                echo 'next = null' . PHP_EOL;
-                usleep(500000); //ждать полсекунды
-            } else {
-                //$pool->submit(new MyWork($i, $next_url));
-                new MyWork($i, $next_url);
-                echo 'Start #' . $i . PHP_EOL;
+            if ($next_url !== null && ($this->max_depth === 0 || $next_url['depth'] <= $this->max_depth)) {
+                $this->provider->synchronized(function ($provider) {
+                    $provider->incThreadsCounter();
+                }, $this->provider);
+                $pool->submit(new MyWork($i, $next_url));
+                //echo 'Start thread #' . $i . PHP_EOL;
                 $i++;
             }
-            $threads_counter = 0;
-            $this->provider->synchronized(function ($provider) use (&$threads_counter) {
-                $threads_counter = $provider->getThreadsCounter();
-            }, $this->provider);
-            echo 'pool: ' . $threads_counter . PHP_EOL;
-        } while ($threads_counter > 0 || $next_url !== null);
-        echo 'Start threads stopped!' . PHP_EOL;
-        //$pool->shutdown();
-
-        /*if ($save_to_db) {
+        }
+        echo 'Stop parse!' . PHP_EOL;
+        if ($this->save_to_db) {
             $this->saveToDB(true);
-        }*/
+        }
+        $pool->shutdown();
+    }
+
+    public function checkStatus()
+    {
+        $status = false;
+        $this->provider->synchronized(function ($provider) use (&$status) {
+            $status = $provider->checkStatus();
+        }, $this->provider);
+        return $status;
+    }
+
+    public function saveToDB($overwrite)
+    {
+        saveAll((array)$this->provider->getLinks(), $overwrite);
     }
 }

@@ -16,52 +16,42 @@ class MyDataProvider extends Threaded
 
     private $unique_links; // массив уникальных ссылок
 
-    private $max_depth; // глубина прохода по ссылкам
     private $root; // корневой адрес сайта
     private $transition; // стратегия отсеивания ссылок (INTERNAL / EXTERNAL / ALL)
     private $checkstatus; // проверка http статуса
 
     public $internal_counter;
     public $external_counter;
+    public $raw_links_counter;
 
     private $threads_counter;
 
-    public function __construct($depth, $root, $transition, $checkstatus)
+    public function __construct($root, $transition, $checkstatus)
     {
         $this->raw_links = [];
         $this->unique_links = [];
         $this->links = [];
-        $this->max_depth = $depth;
         $this->root = $root;
         $this->transition = $transition;
         $this->checkstatus = $checkstatus;
-        $this->internal_counter = $this->external_counter = 0;
-        $this->threads_counter = 0;
-    }
-
-    public function getThreadsCounter()
-    {
-        return $this->threads_counter;
+        $this->internal_counter = $this->external_counter = $this->raw_links_counter = $this->threads_counter = 0;
     }
 
     public function incThreadsCounter()
     {
-        $this->threads_counter += 1;
+        $this->threads_counter++;
     }
 
     public function decThreadsCounter()
     {
-        $this->threads_counter = (int)$this->threads_counter - 1;
+        $this->threads_counter--;
     }
 
-    public function incInternalCounter()
+    public function checkStatus()
     {
-        $this->internal_counter++;
-    }
-
-    public function incExternalCounter()
-    {
-        $this->external_counter++;
+        if ($this->threads_counter > 0 || count($this->raw_links) > 0) {
+            return true;
+        } else return false;
     }
 
     public function getCheckstatus()
@@ -79,19 +69,19 @@ class MyDataProvider extends Threaded
         return $this->root;
     }
 
-    public function getMaxDepth()
-    {
-        return $this->max_depth;
-    }
-
     public function getLinks()
     {
         return $this->links;
     }
 
+    public function print(){
+        foreach ($this->links as $link) {
+            echo $link['url'] . PHP_EOL;
+        }
+    }
+
     public function getNextUrl()
     {
-        echo 'Quantity links: ' . count($this->raw_links) . PHP_EOL;
         if (count($this->raw_links) > 0) {
             return (array)$this->raw_links->pop();
         } else return null;
@@ -99,11 +89,17 @@ class MyDataProvider extends Threaded
 
     public function putRawLink($arr)
     {
+        $this->raw_links_counter++;
         $this->raw_links[] = $arr;
     }
 
-    public function putLink($arr)
+    public function putLink($arr, $typeUrl)
     {
+        if ($typeUrl === INTERNAL) {
+            $this->internal_counter++;
+        } else {
+            $this->external_counter++;
+        }
         $this->links[] = $arr;
     }
 
